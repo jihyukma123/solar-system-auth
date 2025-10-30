@@ -50,7 +50,8 @@ pip install -r requirements.txt
 - `fastapi` - 웹 프레임워크
 - `uvicorn` - ASGI 서버
 - `passlib[bcrypt]` - 비밀번호 해싱
-- `python-dotenv` - 환경 변수 관리
+- `bcrypt` - 암호화 라이브러리
+- `python-multipart` - 폼 데이터 처리
 
 ### 2단계: 데이터 초기화
 
@@ -197,24 +198,25 @@ headers = {"Authorization": f"Bearer {token['access_token']}"}
 
 ## 🎨 설정 커스터마이징 (선택사항)
 
-`.env` 파일을 만들어서 설정 변경 가능:
+`config.py` 파일을 직접 수정해서 설정 변경 가능:
 
-```env
-# 서버 설정
-HOST=0.0.0.0
-PORT=8000
-
-# 토큰 만료 시간
-ACCESS_TOKEN_EXPIRE_SECONDS=3600
-REFRESH_TOKEN_EXPIRE_DAYS=30
-
-# CORS (쉼표로 구분)
-CORS_ORIGINS=*
-
-# 관리자 계정
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
-ADMIN_EMAIL=admin@example.com
+```python
+class Settings:
+    # 서버 설정
+    HOST = "0.0.0.0"
+    PORT = 8000
+    
+    # 토큰 만료 시간
+    ACCESS_TOKEN_EXPIRE_SECONDS = 3600
+    REFRESH_TOKEN_EXPIRE_DAYS = 30
+    
+    # CORS
+    CORS_ORIGINS = ["*"]
+    
+    # 관리자 계정
+    ADMIN_USERNAME = "admin"
+    ADMIN_PASSWORD = "admin123"
+    ADMIN_EMAIL = "admin@example.com"
 ```
 
 ## ⚠️ In-Memory 버전 사용 시 주의사항

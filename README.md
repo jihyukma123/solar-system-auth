@@ -22,7 +22,7 @@ For production use, consider implementing persistent storage (database).
 - ✅ **Standards Compliant** with OAuth 2.0 RFC 6749
 - ✅ **Built-in UI** for authorization consent
 - ✅ **CORS Support** for cross-origin requests
-- ✅ **Minimal Dependencies** - FastAPI, passlib, python-dotenv
+- ✅ **Minimal Dependencies** - FastAPI, passlib, bcrypt
 
 ## 🚂 Deploy to Railway (Recommended for MCP Integration)
 
@@ -231,28 +231,29 @@ python example_client.py
 
 ## Configuration
 
-Create a `.env` file to customize settings:
+All configuration is hardcoded in `config.py` for simplicity. Edit the file directly to customize:
 
-```env
-# Application Settings
-DEBUG=false
-HOST=0.0.0.0
-PORT=8000
-
-# Security
-SECRET_KEY=your-secret-key-change-this-in-production
-
-# Token Expiration
-ACCESS_TOKEN_EXPIRE_SECONDS=3600
-REFRESH_TOKEN_EXPIRE_DAYS=30
-
-# CORS Origins (comma-separated)
-CORS_ORIGINS=*
-
-# Admin User
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
-ADMIN_EMAIL=admin@example.com
+```python
+class Settings:
+    # Application
+    APP_NAME = "Solar System OAuth Server"
+    DEBUG = False
+    
+    # Server
+    HOST = "0.0.0.0"
+    PORT = 8000
+    
+    # Security
+    SECRET_KEY = "your-secret-key-change-this-in-production"
+    
+    # Token Expiration
+    ACCESS_TOKEN_EXPIRE_SECONDS = 3600  # 1 hour
+    REFRESH_TOKEN_EXPIRE_DAYS = 30  # 30 days
+    
+    # Admin User
+    ADMIN_USERNAME = "admin"
+    ADMIN_PASSWORD = "admin123"
+    ADMIN_EMAIL = "admin@example.com"
 ```
 
 ## Project Structure
@@ -308,7 +309,7 @@ If you want to use this in production:
 1. **Implement Persistent Storage**: Replace in-memory storage with a database
 2. **Use HTTPS**: Deploy behind a reverse proxy with SSL/TLS
 3. **Strong Secrets**: Generate secure random keys
-4. **Environment Variables**: Never commit `.env` files
+4. **Configuration Management**: Use environment variables instead of hardcoded values
 5. **CORS**: Restrict `CORS_ORIGINS` to specific domains
 6. **Rate Limiting**: Add rate limiting middleware
 7. **Audit Logging**: Log all authentication attempts

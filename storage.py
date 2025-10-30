@@ -28,6 +28,10 @@ class User:
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password"""
+        # bcrypt has a 72 byte limit, truncate if necessary
+        password_bytes = password.encode('utf-8')
+        if len(password_bytes) > 72:
+            password = password_bytes[:72].decode('utf-8', errors='ignore')
         return pwd_context.hash(password)
 
 
