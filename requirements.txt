@@ -4,7 +4,7 @@ uvicorn[standard]
 
 # --- Security ---
 passlib[bcrypt]
-bcrypt
+bcrypt<4
 
 # --- Utilities ---
 python-multipart
