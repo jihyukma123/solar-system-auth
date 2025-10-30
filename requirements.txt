@@ -1,0 +1,9 @@
+# --- Web Framework ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# --- Security ---
+passlib[bcrypt]>=1.7.4
+
+# --- Utilities ---
+python-dotenv>=1.0.1
