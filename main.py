@@ -11,6 +11,12 @@ from datetime import datetime, timedelta
 from config import settings
 from storage import storage
 
+import logging
+
+# 모듈 레벨 logger 생성 (권장)
+logger = logging.getLogger(__name__)
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
@@ -441,7 +447,9 @@ async def register_client(
 async def oauth_metadata(request: Request):
     """OAuth 2.0 Authorization Server Metadata"""
     base_url = str(request.base_url).rstrip("/")
-    
+
+    logger.info(f"OAuth metadata: {base_url}")
+
     return {
         "issuer": base_url,
         "authorization_endpoint": f"{base_url}/authorize",
