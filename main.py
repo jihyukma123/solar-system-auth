@@ -111,7 +111,13 @@ async def root():
                 <strong>GET /userinfo</strong> - Get user information
             </div>
             <div class="endpoint">
-                <strong>POST /register-client</strong> - Register new OAuth2 client
+                <strong>POST /register</strong> - RFC 7591 Dynamic Client Registration (for ChatGPT, etc.)
+            </div>
+            <div class="endpoint">
+                <strong>POST /register-client</strong> - Register new OAuth2 client (form-based)
+            </div>
+            <div class="endpoint">
+                <strong>GET /.well-known/oauth-authorization-server</strong> - OAuth metadata
             </div>
             <div class="endpoint">
                 <strong>GET /docs</strong> - API documentation
@@ -443,6 +449,66 @@ async def register_client(
     }
 
 
+@app.post("/register")
+async def dynamic_client_registration(request: Request):
+    """
+    RFC 7591 Dynamic Client Registration Endpoint
+    Allows clients (like ChatGPT) to dynamically register themselves
+    """
+    try:
+        # Parse JSON request body
+        body = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid JSON in request body"
+        )
+    
+    # Extract client metadata from request
+    client_name = body.get("client_name", "Unnamed Client")
+    redirect_uris = body.get("redirect_uris", [])
+    
+    # Validate redirect URIs
+    if not redirect_uris or not isinstance(redirect_uris, list):
+        raise HTTPException(
+            status_code=400,
+            detail="redirect_uris is required and must be a non-empty array"
+        )
+    
+    # Optional fields
+    grant_types = body.get("grant_types", ["authorization_code", "refresh_token"])
+    response_types = body.get("response_types", ["code"])
+    scope = body.get("scope", "openid profile email")
+    token_endpoint_auth_method = body.get("token_endpoint_auth_method", "client_secret_basic")
+    
+    # Generate client credentials
+    client_id = f"client_{secrets.token_urlsafe(16)}"
+    client_secret = secrets.token_urlsafe(32)
+    
+    # Create client in storage
+    client = storage.create_client(
+        client_id=client_id,
+        client_secret=client_secret,
+        client_name=client_name,
+        redirect_uris=redirect_uris,
+        scope=scope
+    )
+    
+    # Return RFC 7591 compliant response
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "client_id_issued_at": int(datetime.utcnow().timestamp()),
+        "client_secret_expires_at": 0,  # 0 means it doesn't expire
+        "client_name": client_name,
+        "redirect_uris": redirect_uris,
+        "grant_types": grant_types,
+        "response_types": response_types,
+        "token_endpoint_auth_method": token_endpoint_auth_method,
+        "scope": scope,
+    }
+
+
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_metadata(request: Request):
     """OAuth 2.0 Authorization Server Metadata"""
@@ -455,6 +521,7 @@ async def oauth_metadata(request: Request):
         "authorization_endpoint": f"{base_url}/authorize",
         "token_endpoint": f"{base_url}/token",
         "userinfo_endpoint": f"{base_url}/userinfo",
+        "registration_endpoint": f"{base_url}/register",  # RFC 7591 Dynamic Client Registration
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],

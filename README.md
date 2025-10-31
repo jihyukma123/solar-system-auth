@@ -17,9 +17,10 @@ For production use, consider implementing persistent storage (database).
 - ✅ **OAuth 2.0 Authorization Code Flow** with PKCE support
 - ✅ **Refresh Token Grant** for long-lived sessions
 - ✅ **User Authentication** with bcrypt password hashing
+- ✅ **RFC 7591 Dynamic Client Registration** - ChatGPT and other services can register automatically
 - ✅ **Client Management** with dynamic client registration
 - ✅ **In-Memory Storage** - no database required
-- ✅ **Standards Compliant** with OAuth 2.0 RFC 6749
+- ✅ **Standards Compliant** with OAuth 2.0 RFC 6749 and RFC 7591
 - ✅ **Built-in UI** for authorization consent
 - ✅ **CORS Support** for cross-origin requests
 - ✅ **Minimal Dependencies** - FastAPI, passlib, bcrypt
@@ -97,7 +98,8 @@ python example_client.py
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/register-client` | POST | Register a new OAuth2 client |
+| `/register` | POST | RFC 7591 Dynamic Client Registration (JSON) |
+| `/register-client` | POST | Register a new OAuth2 client (form-based) |
 | `/` | GET | API information and documentation |
 | `/docs` | GET | Interactive API documentation (Swagger UI) |
 
@@ -162,6 +164,22 @@ curl -X GET http://localhost:8000/userinfo \
 
 ### 1. Register Your MCP Server as a Client
 
+#### Option A: Dynamic Registration (RFC 7591) - Recommended for ChatGPT
+
+```bash
+curl -X POST http://localhost:8000/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "My MCP Server",
+    "redirect_uris": ["http://localhost:3000/callback", "http://127.0.0.1:3000/callback"],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "scope": "openid profile email"
+  }'
+```
+
+#### Option B: Form-based Registration
+
 ```bash
 curl -X POST http://localhost:8000/register-client \
   -d "client_name=My MCP Server" \
@@ -196,6 +214,57 @@ Your MCP client should:
 3. Exchange the code for an access token
 4. Use the access token to authenticate API requests
 
+## ChatGPT Integration
+
+This OAuth server now supports **RFC 7591 Dynamic Client Registration**, which means ChatGPT and other services can automatically register themselves as OAuth clients.
+
+### How ChatGPT Uses This Server
+
+1. **Discovery**: ChatGPT fetches `/.well-known/oauth-authorization-server` to find the `registration_endpoint`
+2. **Registration**: ChatGPT automatically POSTs to `/register` with its redirect URIs
+3. **Authorization**: Users are redirected to `/authorize` to grant permissions
+4. **Token Exchange**: ChatGPT exchanges the authorization code for access tokens at `/token`
+
+### Setup for ChatGPT
+
+1. **Deploy your server** (e.g., to Railway):
+   ```
+   https://your-server.up.railway.app
+   ```
+
+2. **Verify metadata endpoint** returns `registration_endpoint`:
+   ```bash
+   curl https://your-server.up.railway.app/.well-known/oauth-authorization-server
+   ```
+   
+   Should include:
+   ```json
+   {
+     "registration_endpoint": "https://your-server.up.railway.app/register",
+     ...
+   }
+   ```
+
+3. **Add to ChatGPT**:
+   - Go to ChatGPT settings
+   - Add new OAuth connector
+   - Enter your server URL: `https://your-server.up.railway.app`
+   - ChatGPT will automatically discover and register itself
+
+4. **User Login**: When users connect, they'll see the authorization page with:
+   - Username: `admin`
+   - Password: `admin123` (or your configured credentials)
+
+### Testing Dynamic Registration Locally
+
+```bash
+# Start server
+python main.py
+
+# Test dynamic registration
+python test_dynamic_registration.py
+```
+
 ## Testing
 
 ### Quick Test
@@ -206,6 +275,9 @@ python test_server.py
 
 # Test full OAuth flow
 python example_client.py
+
+# Test RFC 7591 Dynamic Client Registration
+python test_dynamic_registration.py
 ```
 
 ### Manual Test with cURL
