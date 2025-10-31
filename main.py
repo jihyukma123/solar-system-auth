@@ -2,10 +2,14 @@
 Main FastAPI application for OAuth2 server (In-Memory version)
 """
 from fastapi import FastAPI, HTTPException, Request, Form, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import secrets
+import hashlib
+import base64
+import jwt
+import json
 from datetime import datetime, timedelta
 
 from config import settings
@@ -286,7 +290,9 @@ async def authorize_consent(
         user_id=user.id,
         redirect_uri=redirect_uri,
         scope=scope,
-        expires_in_minutes=settings.AUTHORIZATION_CODE_EXPIRE_MINUTES
+        expires_in_minutes=settings.AUTHORIZATION_CODE_EXPIRE_MINUTES,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method
     )
     
     # Redirect back to client with code
@@ -332,8 +338,31 @@ async def token(
         if auth_code.redirect_uri != redirect_uri:
             raise HTTPException(status_code=400, detail="Redirect URI mismatch")
         
+        # PKCE verification
+        if auth_code.code_challenge:
+            if not code_verifier:
+                raise HTTPException(status_code=400, detail="code_verifier required")
+            
+            # Verify code_challenge
+            if auth_code.code_challenge_method == "S256":
+                # SHA256 hash
+                verifier_hash = hashlib.sha256(code_verifier.encode()).digest()
+                verifier_challenge = base64.urlsafe_b64encode(verifier_hash).decode().rstrip('=')
+                if verifier_challenge != auth_code.code_challenge:
+                    raise HTTPException(status_code=400, detail="Invalid code_verifier")
+            elif auth_code.code_challenge_method == "plain":
+                if code_verifier != auth_code.code_challenge:
+                    raise HTTPException(status_code=400, detail="Invalid code_verifier")
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported code_challenge_method")
+        
         # Mark code as used
         storage.mark_code_as_used(code)
+        
+        # Get user info for ID token
+        user = storage.get_user_by_id(auth_code.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
         
         # Generate tokens
         token_obj = storage.create_token(
@@ -344,13 +373,30 @@ async def token(
             include_refresh_token=True
         )
         
-        return {
+        # Generate ID token if openid scope is requested
+        response = {
             "access_token": token_obj.access_token,
             "token_type": "Bearer",
             "expires_in": settings.ACCESS_TOKEN_EXPIRE_SECONDS,
             "refresh_token": token_obj.refresh_token,
             "scope": auth_code.scope,
         }
+        
+        if "openid" in auth_code.scope:
+            base_url = str(request.base_url).rstrip("/")
+            id_token_payload = {
+                "iss": base_url,
+                "sub": str(user.id),
+                "aud": client_id,
+                "exp": int((datetime.utcnow() + timedelta(seconds=settings.ACCESS_TOKEN_EXPIRE_SECONDS)).timestamp()),
+                "iat": int(datetime.utcnow().timestamp()),
+                "email": user.email,
+                "name": user.full_name,
+            }
+            id_token = jwt.encode(id_token_payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+            response["id_token"] = id_token
+        
+        return response
     
     # Refresh Token Grant
     elif grant_type == "refresh_token":
@@ -509,6 +555,26 @@ async def dynamic_client_registration(request: Request):
     }
 
 
+@app.get("/.well-known/jwks.json")
+async def jwks():
+    """JSON Web Key Set (JWKS) endpoint for token verification"""
+    # Generate a simple JWK from the secret key
+    # In production, use proper RSA keys
+    key_id = hashlib.sha256(settings.SECRET_KEY.encode()).hexdigest()[:16]
+    
+    return {
+        "keys": [
+            {
+                "kty": "oct",  # Symmetric key type
+                "kid": key_id,
+                "use": "sig",
+                "alg": "HS256",
+                "k": base64.urlsafe_b64encode(settings.SECRET_KEY.encode()).decode().rstrip("=")
+            }
+        ]
+    }
+
+
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_metadata(request: Request):
     """OAuth 2.0 Authorization Server Metadata"""
@@ -521,12 +587,15 @@ async def oauth_metadata(request: Request):
         "authorization_endpoint": f"{base_url}/authorize",
         "token_endpoint": f"{base_url}/token",
         "userinfo_endpoint": f"{base_url}/userinfo",
-        "registration_endpoint": f"{base_url}/register",  # RFC 7591 Dynamic Client Registration
-        "response_types_supported": ["code"],
+        "jwks_uri": f"{base_url}/.well-known/jwks.json",
+        "registration_endpoint": f"{base_url}/register",
+        "response_types_supported": ["code", "token", "id_token", "code id_token"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
         "code_challenge_methods_supported": ["S256", "plain"],
         "scopes_supported": ["openid", "profile", "email"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["HS256"],
     }
 
 

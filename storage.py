@@ -52,12 +52,16 @@ class OAuth2Client:
 class AuthorizationCode:
     """Authorization code model"""
     def __init__(self, code: str, client_id: str, user_id: int, redirect_uri: str,
-                 scope: str = "", expires_in_minutes: int = 10):
+                 scope: str = "", expires_in_minutes: int = 10,
+                 code_challenge: Optional[str] = None,
+                 code_challenge_method: Optional[str] = None):
         self.code = code
         self.client_id = client_id
         self.user_id = user_id
         self.redirect_uri = redirect_uri
         self.scope = scope
+        self.code_challenge = code_challenge
+        self.code_challenge_method = code_challenge_method
         self.expires_at = datetime.utcnow() + timedelta(minutes=expires_in_minutes)
         self.used = False
         self.created_at = datetime.utcnow()
@@ -143,10 +147,13 @@ class InMemoryStorage:
     
     # Authorization code methods
     def create_authorization_code(self, client_id: str, user_id: int, redirect_uri: str,
-                                 scope: str = "", expires_in_minutes: int = 10) -> AuthorizationCode:
+                                 scope: str = "", expires_in_minutes: int = 10,
+                                 code_challenge: Optional[str] = None,
+                                 code_challenge_method: Optional[str] = None) -> AuthorizationCode:
         """Create a new authorization code"""
         code = secrets.token_urlsafe(32)
-        auth_code = AuthorizationCode(code, client_id, user_id, redirect_uri, scope, expires_in_minutes)
+        auth_code = AuthorizationCode(code, client_id, user_id, redirect_uri, scope, 
+                                     expires_in_minutes, code_challenge, code_challenge_method)
         self.authorization_codes[code] = auth_code
         return auth_code
     
